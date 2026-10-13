@@ -48,11 +48,12 @@ jobs:
         run: |
           cd ${{ env.WORKDIR }}
           make -j$(nproc)
-      - name: Collect firmware artifacts
+            - name: Collect firmware artifacts
         run: |
           cd ${{ env.WORKDIR }}
           mkdir -p ../firmware
-          cp bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.img bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums ../firmware/
+          cp bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/*.bin bin/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/sha256sums ../firmware/
+
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
