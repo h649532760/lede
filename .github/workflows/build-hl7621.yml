@@ -17,9 +17,9 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Fetch Lean Lede source (ghproxy加速)
+      - name: Fetch Lean Lede source
         run: |
-          git clone --depth=1 --branch master https://ghproxy.com/https://github.com/coolsnowwolf/lede.git ${{ env.WORKDIR }}
+          git clone --depth=1 --branch master https://github.com/coolsnowwolf/lede.git ${{ env.WORKDIR }}
 
       - name: Install build dependencies
         run: |
