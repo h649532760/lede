@@ -12,18 +12,13 @@
  *
  * 目标版本：OpenWrt 24.10（内核 6.6）
  */
-
 /dts-v1/;
-
 #include "mt7621.dtsi"
-
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
-
 / {
 	compatible = "hailin,hl7621-s", "mediatek,mt7621-soc";
 	model = "Hailin HL7621-S";
-
 	aliases {
 		led-boot = &led_power;
 		led-failsafe = &led_power;
@@ -31,41 +26,40 @@
 		led-upgrade = &led_power;
 		label-mac-device = &gmac0;
 	};
-
+	chosen {
+		bootargs = "console=ttyS0,115200";
+	};
 	memory@0 {
 		device_type = "memory";
 		reg = <0x0 0x10000000>;  /* 256MB */
 	};
-
 	leds {
 		compatible = "gpio-leds";
-
 		led_power: led-0 {
 			label = "blue:power";
 			gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
 		};
-
+		/*
+		 * 注意：GPIO1/GPIO2属于UART1复用组，
+		 * 如果state_default没有增加"uart1"，下面两个LED不会点亮
+		 */
 		led-1 {
 			label = "green:wifi";
 			gpios = <&gpio 1 GPIO_ACTIVE_LOW>;
 		};
-
 		led_4g: led-2 {
 			label = "green:4g";
 			gpios = <&gpio 2 GPIO_ACTIVE_LOW>;
 		};
 	};
-
 	keys {
 		compatible = "gpio-keys";
-
 		reset {
 			label = "reset";
 			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
 		};
 	};
-
 	/*
 	 * USB3.0 口 VBus：如果插 U 盘后 dmesg 完全没反应，说明 5V 受 GPIO 控制。
 	 * 把 XX 换成实测脚位并解除注释，同时打开下面 &xhci 里的 vbus-supply。
@@ -80,7 +74,6 @@
 	// 	enable-active-high;
 	// };
 };
-
 /*
  * 模块电源：用 gpio-hog，在 GPIO 驱动 probe 时（早于 PCIe/USB 驱动）立即拉高，
  * 不依赖用户态脚本，也不需要额外内核包。
@@ -97,14 +90,12 @@
 		output-high;
 		line-name = "modem-power";
 	};
-
 	wifi_pwr_hog: wifi-power-hog {
 		gpio-hog;
 		gpios = <14 GPIO_ACTIVE_HIGH>;
 		output-high;
 		line-name = "wifi-power";
 	};
-
 	modem_pwr2_hog: modem-power2-hog {
 		gpio-hog;
 		gpios = <16 GPIO_ACTIVE_HIGH>;
@@ -112,42 +103,34 @@
 		line-name = "modem-power2";
 	};
 };
-
 &spi0 {
 	status = "okay";
-
 	flash@0 {
 		compatible = "jedec,spi-nor";
 		reg = <0>;
 		spi-max-frequency = <50000000>;
-
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
 			#size-cells = <1>;
-
 			partition@0 {
 				label = "u-boot";
 				reg = <0x0 0x30000>;   /* 192KB */
 				read-only;
 			};
-
 			partition@30000 {
 				label = "u-boot-env";
 				reg = <0x30000 0x10000>; /* 64KB */
 				read-only;
 			};
-
 			factory: partition@40000 {
 				label = "factory";
 				reg = <0x40000 0x10000>; /* 64KB */
 				read-only;
-
 				nvmem-layout {
 					compatible = "fixed-layout";
 					#address-cells = <1>;
 					#size-cells = <1>;
-
 					/*
 					 * 偏移以原厂 system.bin 里的实际布局为准，
 					 * 上板后用 hexdump -C /dev/mtd2 | grep -i xx:xx 校验
@@ -157,7 +140,6 @@
 					};
 				};
 			};
-
 			partition@50000 {
 				compatible = "denx,uimage";
 				label = "firmware";
@@ -166,35 +148,30 @@
 		};
 	};
 };
-
 &pcie {
 	status = "okay";
 };
-
 /*
  * WPEA-121NW（AR9382）由 ath9k 按 PCI ID 自动绑定，不需要 nvmem/eeprom 节点。
  * 这个 wifi@ 子节点的作用是给它挂 LED/名称，删掉也能工作。
  * 插在哪个 root port 以 `lspci -n` 实测为准；若在 pcie1/pcie2，把本节点挪过去。
+ * PCI ID:168c,0030 = AR9382
  */
 &pcie0 {
 	wifi0: wifi@0,0 {
-		compatible = "pci168c,003a";  /* AR9382/AR9390，以 lspci -n 实测为准 */
+		compatible = "pci168c,0030";
 		reg = <0x0000 0 0 0 0>;
 	};
 };
-
 /* 另外两个 root port 留给 4G / 扩展网卡（USB 模式的 4G 模块实际走 USB，不占 PCIe） */
 &pcie1 {
 };
-
 &pcie2 {
 };
-
 &gmac0 {
 	nvmem-cells = <&macaddr_factory_e000>;
 	nvmem-cell-names = "mac-address";
 };
-
 /*
  * 5 个千兆口全部接片内 MT7530 交换芯片，走 gmac0 + fixed-link。
  * gmac1 在官方 dtsi 里默认 disabled（无外接 PHY），保持不动。
@@ -206,29 +183,24 @@
 			status = "okay";
 			label = "wan";
 		};
-
 		port@1 {
 			status = "okay";
 			label = "lan1";
 		};
-
 		port@2 {
 			status = "okay";
 			label = "lan2";
 		};
-
 		port@3 {
 			status = "okay";
 			label = "lan3";
 		};
-
 		port@4 {
 			status = "okay";
 			label = "lan4";
 		};
 	};
 };
-
 /*
  * TF 卡座：sdhci 复用组 = GPIO41~48，与电源脚 13/14/16 不冲突，可正常开启。
  * 依赖 kmod-mmc-mtk（已在设备定义里列入 DEVICE_PACKAGES）。
@@ -236,12 +208,10 @@
 &sdhci {
 	status = "okay";
 };
-
 /* 调试串口 */
 &uartlite {
 	status = "okay";
 };
-
 /*
  * 片内 USB：xhci-mtk 同时提供 USB3.0 与 USB2.0，
  * USB2.0 口、USB3.0 口、4G 模块的 USB 信号都挂在它下面。
@@ -251,19 +221,16 @@
 	status = "okay";
 	// vbus-supply = <&reg_usb_vbus>;
 };
-
 /*
  * 释放引脚给普通 GPIO 用（24.10 的 &state_default 新式写法）：
  *   jtag = GPIO13~17 → 4G 电源 13/16、WiFi 电源 14
  *   wdt  = GPIO18    → reset 按键
  *
- * 注意冲突：GPIO1/GPIO2 属于 uart1 复用组，就是调试串口的 TX/RX。
- * 只要保留 console，green:wifi 和 green:4g 两个 LED 就不会亮。
- * 要么换到空闲脚位，要么在此处追加 "uart1" 放弃调试串口。
+ * 【重要】如果需要GPIO1/GPIO2做wifi/4g LED，必须追加 "uart1"，否则LED不亮
  */
 &state_default {
 	gpio {
-		groups = "jtag", "wdt";
+		groups = "jtag", "wdt", "uart1";
 		function = "gpio";
 	};
 };
