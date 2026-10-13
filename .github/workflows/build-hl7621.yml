@@ -7,7 +7,7 @@ on:
       - '.github/workflows/build-hl7621.yml'
 
 env:
-  OPENWRT_BRANCH: v24.10.x
+  OPENWRT_BRANCH: v24.10
   DEVICE_PROFILE: hailin_hl7621-s
   WORKDIR: openwrt
   CACHE_KEY: openwrt-dl-${{ github.ref_name }}
