@@ -1,24 +1,13 @@
-// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
-/*
- * Hailin HL7621-S — MT7621 / 256MB DDR3 / 16MB SPI-NOR
- *
- * WiFi: SparkLAN WPEA-121NW = Atheros AR9382 2x2 802.11abgn（mini-PCIe，PCI ID 168c:0030）
- *       驱动 ath9k（kmod-ath9k），校准数据在芯片 OTP 里，不读 factory 分区
- * 4G:   mini-PCIe 模块，USB 信号走片内 xhci
- *
- * 实测引脚（用户确认）：GPIO13 + GPIO16 = 4G 电源，GPIO14 = WiFi 电源
- * 关键：GPIO19 是 PCIe PERST#，被官方 mt7621.dtsi 的 pcie 节点占用，
- *       绝对不能挪作他用，否则 PCIe 链路训练失败，WiFi 和 4G 一起挂。
- *
- * 目标版本：OpenWrt 24.10（内核 6.6）
- */
 /dts-v1/;
+
 #include "mt7621.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+
 / {
 	compatible = "hailin,hl7621-s", "mediatek,mt7621-soc";
 	model = "Hailin HL7621-S";
+
 	aliases {
 		led-boot = &led_power;
 		led-failsafe = &led_power;
@@ -26,32 +15,19 @@
 		led-upgrade = &led_power;
 		label-mac-device = &gmac0;
 	};
+
 	chosen {
 		bootargs = "console=ttyS0,115200";
 	};
-	memory@0 {
-		device_type = "memory";
-		reg = <0x0 0x10000000>;  /* 256MB */
-	};
+
 	leds {
 		compatible = "gpio-leds";
-		led_power: led-0 {
-			label = "blue:power";
-			gpios = <&gpio 0 GPIO_ACTIVE_LOW>;
-		};
-		/*
-		 * 注意：GPIO1/GPIO2属于UART1复用组，
-		 * state_default已经增加"uart1"释放引脚，LED可以点亮
-		 */
-		led-1 {
-			label = "green:wifi";
-			gpios = <&gpio 1 GPIO_ACTIVE_LOW>;
-		};
-		led_4g: led-2 {
-			label = "green:4g";
-			gpios = <&gpio 2 GPIO_ACTIVE_LOW>;
+		led_power: power {
+			label = "power";
+			gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
 		};
 	};
+
 	keys {
 		compatible = "gpio-keys";
 		reset {
@@ -61,84 +37,54 @@
 		};
 	};
 };
-&gpio {
-	modem_pwr_hog: modem-power-hog {
-		gpio-hog;
-		gpios = <13 GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "modem-power";
-	};
-	wifi_pwr_hog: wifi-power-hog {
-		gpio-hog;
-		gpios = <14 GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "wifi-power";
-	};
-	modem_pwr2_hog: modem-power2-hog {
-		gpio-hog;
-		gpios = <16 GPIO_ACTIVE_HIGH>;
-		output-high;
-		line-name = "modem-power2";
-	};
-};
+
 &spi0 {
 	status = "okay";
+
 	flash@0 {
 		compatible = "jedec,spi-nor";
-		reg = <0>;
-		spi-max-frequency = <50000000>;
+		reg = <0x0 0x2000000>;
+		spi-max-frequency = <40000000>;
+		broken-flash-reset;  /* MT7621经典修复，解决reboot死循环 */
+
 		partitions {
 			compatible = "fixed-partitions";
 			#address-cells = <1>;
 			#size-cells = <1>;
+
 			partition@0 {
 				label = "u-boot";
-				reg = <0x0 0x30000>;   /* 192KB */
+				reg = <0x000000 0x050000>;
 				read-only;
 			};
-			partition@30000 {
-				label = "u-boot-env";
-				reg = <0x30000 0x10000>; /* 64KB */
-				read-only;
-			};
-			factory: partition@40000 {
-				label = "factory";
-				reg = <0x40000 0x10000>; /* 64KB */
-				read-only;
-				nvmem-layout {
-					compatible = "fixed-layout";
-					#address-cells = <1>;
-					#size-cells = <1>;
-					macaddr_factory_e000: macaddr@e000 {
-						reg = <0xe000 0x6>;
-					};
-				};
-			};
+
 			partition@50000 {
-				compatible = "denx,uimage";
+				label = "u-boot-env";
+				reg = <0x050000 0x010000>;
+			};
+
+			factory: partition@60000 {
+				label = "factory";
+				reg = <0x060000 0x010000>;
+				read-only; /* WiFi校准数据，禁止覆盖！ */
+			};
+
+			partition@70000 {
 				label = "firmware";
-				reg = <0x50000 0xfb0000>;
+				reg = <0x070000 0x1f90000>;
 			};
 		};
 	};
 };
-&pcie {
-	status = "okay";
-};
-&pcie0 {
-	wifi0: wifi@0,0 {
-		compatible = "pci168c,0030";
-		reg = <0x0000 0 0 0 0>;
-	};
-};
-&pcie1 {
-};
-&pcie2 {
-};
+
 &gmac0 {
-	nvmem-cells = <&macaddr_factory_e000>;
-	nvmem-cell-names = "mac-address";
+	mtd-mac-address = <&factory 0x0004>;
 };
+
+&gmac1 {
+	status = "disabled";
+};
+
 &switch0 {
 	ports {
 		port@0 {
@@ -163,18 +109,23 @@
 		};
 	};
 };
-&sdhci {
+
+&pcie0 {
 	status = "okay";
 };
-&uartlite {
+
+&pcie1 {
 	status = "okay";
 };
-&xhci {
+
+&pcie2 {
 	status = "okay";
 };
-&state_default {
-	gpio {
-		groups = "jtag", "wdt", "uart1";
-		function = "gpio";
-	};
+
+&usb {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
 };
